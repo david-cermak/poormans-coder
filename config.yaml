@@ -1,0 +1,22 @@
+# poormans-coder config
+# For Ollama: base_url: "http://localhost:11434/v1", model: "glm-4.7-flash" or "ministral-3:14b"
+
+llm:
+  model: "glm-4.7-flash"
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"  # Ollama doesn't need a real key; use dummy
+  stream: true
+
+project_root: "."  # relative to cwd, or absolute path
+
+max_turns: 10
+
+lint:
+  enabled: true
+  command: "ruff check ."
+  cwd: "."
+
+compile:
+  enabled: false
+  command: "python -m py_compile ."
+  cwd: "."
