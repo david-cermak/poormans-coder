@@ -25,6 +25,7 @@ class LintConfig:
 class Config:
     llm: LLMConfig
     project_root: str
+    idf_path: str | None
     max_turns: int
     lint: LintConfig
     compile: LintConfig  # same shape as lint
@@ -60,9 +61,14 @@ class Config:
         system_path = system_prompt_path or config_path.parent / "system.md"
         system_prompt = system_path.read_text() if system_path.exists() else ""
 
+        idf_path = data.get("idf_path")
+        if idf_path and not Path(idf_path).is_absolute():
+            idf_path = str((Path(config_path).parent / idf_path).resolve())
+
         return cls(
             llm=llm_config,
             project_root=data.get("project_root", "."),
+            idf_path=idf_path,
             max_turns=data.get("max_turns", 10),
             lint=lint_config,
             compile=compile_config,
@@ -74,3 +80,11 @@ class Config:
         if not root.is_absolute():
             root = (cwd / root).resolve()
         return root
+
+    def resolve_idf_path(self, cwd: Path) -> Path | None:
+        if not self.idf_path:
+            return None
+        p = Path(self.idf_path)
+        if not p.is_absolute():
+            p = (cwd / self.idf_path).resolve()
+        return p if p.exists() else None

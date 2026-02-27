@@ -8,6 +8,7 @@ llm:
   stream: true
 
 project_root: "."  # relative to cwd, or absolute path
+idf_path: null    # optional: path to ESP-IDF (e.g. /home/user/esp/idf) for api_overview
 
 max_turns: 10
 

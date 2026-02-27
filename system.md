@@ -7,13 +7,15 @@ When you want to create or overwrite a file, use <write_file>.
 When you want to edit part of an existing file, use <edit_file>.
 When you are done, use <done>.
 
+## Multi-turn workflow
+
+You do NOT need to resolve everything in a single turn. Prefer asking for context first, then implementing in the next turn.
+
+- If you see `#include "foo.h"` and lack API knowledge, request a condensed API overview of that header.
+- The next turn will receive the requested context; then you can implement the changes.
+- When you see header includes and you need their API, use <need_context> with <api_overview header="..." /> to request a condensed API summary.
+
 Example:
-<write_file path="bubble_sort.py">
-def bubble_sort(arr):
-    n = len(arr)
-    for i in range(n):
-        for j in range(0, n - i - 1):
-            if arr[j] > arr[j + 1]:
-                arr[j], arr[j + 1] = arr[j + 1], arr[j]
-    return arr
-</write_file>
+<need_context>
+  <api_overview header="esp_log.h" />
+</need_context>

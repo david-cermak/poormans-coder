@@ -9,11 +9,11 @@ from pathlib import Path
 
 from config import Config
 from context import Context, fulfill_requests
-from executor import write_file, edit_file
+from executor import write_file, edit_file, read_file
 from lint import run_command
 from llm import create_client, generate
 from parser import parse_output
-from prompt import build_user_message
+from prompt import build_user_message, extract_at_mentions
 
 # Setup logging
 LOG_DIR = Path(__file__).parent / "logs"
@@ -50,10 +50,20 @@ def build_turn_summary(parsed, lint_out: str | None, compile_out: str | None) ->
     return " ".join(parts) if parts else "No changes."
 
 
-def run_agent(config: Config, task: str, project_root: Path) -> None:
+def run_agent(config: Config, task: str, project_root: Path, cwd: Path, verbose: bool = False) -> None:
     """Main agent loop."""
     client = create_client(config.llm.api_key, config.llm.base_url)
     context = Context()
+
+    # Pre-load @path/to/file mentions from task into context
+    for path in extract_at_mentions(task, cwd, project_root):
+        try:
+            content = read_file(project_root, path)
+            context.add_file(path, content)
+            log.info("Pre-loaded @%s", path)
+        except Exception as e:
+            log.warning("Could not pre-load @%s: %s", path, e)
+
     turn_summary = ""
 
     for turn in range(config.max_turns):
@@ -70,6 +80,15 @@ def run_agent(config: Config, task: str, project_root: Path) -> None:
             {"role": "user", "content": user_content},
         ]
 
+        if verbose:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write("\n\n=== LLM REQUEST ===\n")
+                f.write("--- system ---\n")
+                f.write(config.system_prompt)
+                f.write("\n--- user ---\n")
+                f.write(user_content)
+                f.write("\n")
+
         try:
             response = generate(
                 client,
@@ -81,6 +100,12 @@ def run_agent(config: Config, task: str, project_root: Path) -> None:
             log.error("LLM error: %s", e)
             raise
 
+        if verbose:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write("\n=== LLM RESPONSE ===\n")
+                f.write(response)
+                f.write("\n")
+
         try:
             parsed = parse_output(response)
         except ValueError as e:
@@ -89,7 +114,8 @@ def run_agent(config: Config, task: str, project_root: Path) -> None:
 
         # 1. Fulfill context requests
         if parsed.need_context:
-            fulfill_requests(project_root, context, parsed.need_context)
+            idf_path = config.resolve_idf_path(project_root)
+            fulfill_requests(project_root, context, parsed.need_context, idf_path=idf_path)
 
         # 2. Apply file operations
         context.edit_failures.clear()
@@ -143,6 +169,7 @@ def main():
     parser.add_argument("--prompt", "-p", required=True, help="Task to accomplish")
     parser.add_argument("--config", "-c", default=None, help="Config YAML path")
     parser.add_argument("--project", default=None, help="Project root (overrides config)")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Log full LLM request/response to log file")
     args = parser.parse_args()
 
     base = Path(__file__).parent
@@ -154,7 +181,7 @@ def main():
     project_root = project_root.resolve()
 
     log.info("Project root: %s", project_root)
-    run_agent(config, args.prompt, project_root)
+    run_agent(config, args.prompt, project_root, cwd, verbose=args.verbose)
 
 
 if __name__ == "__main__":

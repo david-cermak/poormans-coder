@@ -1,5 +1,51 @@
 """Build prompts for the LLM."""
 
+import re
+from pathlib import Path
+
+
+def extract_at_mentions(task: str, cwd: Path, project_root: Path) -> list[str]:
+    """Extract @path/to/file from task; return project_root-relative paths that exist."""
+    # Match @path (alphanumeric, /, _, -, .)
+    pattern = re.compile(r"@([a-zA-Z0-9_./\-]+)")
+    seen = set()
+    result = []
+    proot = project_root.resolve()
+    proot_name = proot.name
+
+    for m in pattern.finditer(task):
+        raw = m.group(1).strip()
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+
+        # Try cwd first (e.g. @test/proto/... from repo root)
+        full = (cwd / raw).resolve()
+        if full.is_file():
+            # If path starts with project_root name (e.g. test/), use the rest as project-rel
+            if raw.startswith(proot_name + "/"):
+                result.append(raw[len(proot_name) + 1 :])
+            else:
+                try:
+                    rel = full.relative_to(proot)
+                    result.append(str(rel))
+                except ValueError:
+                    # full is outside project (e.g. via symlink); try project_root/raw
+                    p = (proot / raw).resolve()
+                    if p.is_file():
+                        result.append(raw)
+        else:
+            # Try relative to project_root
+            p = (proot / raw).resolve()
+            if p.is_file():
+                try:
+                    rel = p.relative_to(proot)
+                    result.append(str(rel))
+                except ValueError:
+                    result.append(raw)
+    return result
+
+
 OUTPUT_FORMAT = """
 <output_format>
 To create a new file:
@@ -18,6 +64,7 @@ To request more context:
     <read_file path="/path/to/file.py" />
     <grep pattern="pattern" path="." />
     <list_dir path="." />
+    <api_overview header="esp_log.h" />
   </need_context>
 
 When done:

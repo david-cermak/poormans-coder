@@ -22,6 +22,12 @@ class ListDirRequest:
 
 
 @dataclass
+class ApiOverviewRequest:
+    """Request condensed API overview for a header (e.g. esp_log.h)."""
+    header: str
+
+
+@dataclass
 class WriteFileOp:
     path: str
     content: str
@@ -96,10 +102,14 @@ def read_file(project_root: Path, path: str) -> str:
     proot = project_root.resolve()
     if Path(path).is_absolute():
         p = Path(path).resolve()
+        if not str(p).startswith(str(proot)):
+            raise ValueError(f"Path outside project: {path}")
     else:
-        p = (proot / path).resolve()
-    if not str(p).startswith(str(proot)):
-        raise ValueError(f"Path outside project: {path}")
+        if ".." in path:
+            raise ValueError(f"Path outside project: {path}")
+        p = proot / path
+        if not p.is_file():
+            raise ValueError(f"File not found: {path}")
     return p.read_text()
 
 
@@ -131,6 +141,31 @@ def grep(project_root: Path, pattern: str, path: str = ".") -> list[tuple[str, i
                 pass
 
     return results
+
+
+def find_header(project_root: Path, header: str, idf_path: Path | None) -> Path | None:
+    """Find header file in project or IDF components. Returns path or None."""
+    name = header if header.endswith(".h") else f"{header}.h"
+    # Search in project first
+    for p in project_root.rglob(name):
+        if p.is_file():
+            return p
+    # Search in IDF components
+    if idf_path and idf_path.exists():
+        components = idf_path / "components"
+        if components.exists():
+            for p in components.rglob(name):
+                if p.is_file() and "include" in p.parts:
+                    return p
+    return None
+
+
+def read_header_for_api(project_root: Path, header: str, idf_path: Path | None) -> str:
+    """Read header content for API overview. Path may be outside project_root."""
+    p = find_header(project_root, header, idf_path)
+    if p is None:
+        return f"(header not found: {header})"
+    return p.read_text()
 
 
 def list_dir(project_root: Path, path: str = ".") -> list[tuple[str, bool]]:

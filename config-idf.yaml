@@ -1,0 +1,23 @@
+# Example config for C/ESP-IDF projects
+# Use: python main.py --config config-idf.yaml --project test -p "Replace printf with ESP_LOGI in mdns_example_main.c"
+
+llm:
+  model: "glm-4.7-flash"
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"
+  stream: true
+
+project_root: "test"
+idf_path: "/home/david/repos/idf"  # adjust to your IDF install
+
+max_turns: 10
+
+lint:
+  enabled: false
+  command: "ruff check ."
+  cwd: "."
+
+compile:
+  enabled: true
+  command: "bash build.sh"
+  cwd: "."   # relative to project_root; use "." to run from project root
